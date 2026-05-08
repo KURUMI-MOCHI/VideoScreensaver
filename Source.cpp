@@ -308,30 +308,33 @@ LRESULT WINAPI ScreenSaverProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		}
 		break;
 	case WM_SIZE:
-		if (bPreviewMode)
-		{
-			RECT rect;
-			GetClientRect(hWnd, &rect);
-			MoveWindow(hWindowsMediaPlayerControl, 0, 0, rect.right, rect.bottom, TRUE);
-		}
-		else
-		{
-			MoveWindow(hWindowsMediaPlayerControl, MonitorList[0].left, MonitorList[0].top, MonitorList[0].right - MonitorList[0].left, MonitorList[0].bottom - MonitorList[0].top, TRUE);
-			for (unsigned int i = 1; i < MonitorList.size(); ++i)
-			{
-				RECT dest = MonitorList[i];
-				ScreenToClient(hWnd, (LPPOINT)&dest.left);
-				ScreenToClient(hWnd, (LPPOINT)&dest.right);
-				DWM_THUMBNAIL_PROPERTIES dskThumbProps;
-				dskThumbProps.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_SOURCECLIENTAREAONLY;
-				dskThumbProps.fSourceClientAreaOnly = FALSE;
-				dskThumbProps.fVisible = TRUE;
-				dskThumbProps.opacity = 255;
-				dskThumbProps.rcDestination = dest;
-				DwmUpdateThumbnailProperties(ThumbnailList[i - 1], &dskThumbProps);
-			}
-		}
-		break;
+        {
+            // プレビューでも本番でも、自分のウィンドウサイズいっぱいにWMPを広げる
+            RECT rect;
+            GetClientRect(hWnd, &rect);
+            MoveWindow(hWindowsMediaPlayerControl, 0, 0, rect.right, rect.bottom, TRUE);
+
+            if (!bPreviewMode)
+            {
+                // サブモニターへの転送処理（既存のロジック）
+                for (unsigned int i = 1; i < MonitorList.size(); ++i)
+                {
+                    RECT dest = MonitorList[i];
+                    ScreenToClient(hWnd, (LPPOINT)&dest.left);
+                    ScreenToClient(hWnd, (LPPOINT)&dest.right);
+                    DWM_THUMBNAIL_PROPERTIES dskThumbProps;
+                    dskThumbProps.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_SOURCECLIENTAREAONLY;
+                    dskThumbProps.fSourceClientAreaOnly = FALSE;
+                    dskThumbProps.fVisible = TRUE;
+                    dskThumbProps.opacity = 255;
+                    dskThumbProps.rcDestination = dest;
+                    if (i - 1 < ThumbnailList.size()) {
+                        DwmUpdateThumbnailProperties(ThumbnailList[i - 1], &dskThumbProps);
+                    }
+                }
+            }
+        }
+        break;
 	case WM_DESTROY:
 		if (m_spConnectionPoint)
 		{
