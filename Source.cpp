@@ -80,7 +80,27 @@ public:
             RegCloseKey(hKey);
         }
     }
-    void Save() { /* 設定画面用。省略せず元のロジックを保持 */ }
+    void Save() {
+        HKEY hKey;
+        if (ERROR_SUCCESS == RegCreateKeyEx(HKEY_CURRENT_USER, REG_KEY, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL)) {
+            // ファイル数の保存
+            DWORD nFilePathCount = (DWORD)m_lpszFilePathList.size();
+            RegSetValueEx(hKey, L"FilePathCount", 0, REG_DWORD, (BYTE*)&nFilePathCount, sizeof(DWORD));
+            
+            // 各ファイルパスの保存
+            for (DWORD i = 0; i < nFilePathCount; ++i) {
+                WCHAR szKeyName[16];
+                wsprintf(szKeyName, L"FilePath%d", i);
+                RegSetValueEx(hKey, szKeyName, 0, REG_SZ, (BYTE*)m_lpszFilePathList[i], (lstrlen(m_lpszFilePathList[i]) + 1) * sizeof(WCHAR));
+            }
+            
+            // ミュートとランダム設定の保存
+            RegSetValueEx(hKey, L"Mute", 0, REG_DWORD, (BYTE*)&m_dwMute, sizeof(DWORD));
+            RegSetValueEx(hKey, L"Random", 0, REG_DWORD, (BYTE*)&m_dwRandom, sizeof(DWORD));
+            
+            RegCloseKey(hKey);
+        }
+    }
     int GetFilePathCount() { return (int)m_lpszFilePathList.size(); }
     LPCTSTR GetFilePath(int i) { return m_lpszFilePathList[i]; }
     BOOL GetMute() { return m_dwMute != FALSE; }
