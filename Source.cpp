@@ -15,6 +15,7 @@
 
 CComModule _Module;
 WNDPROC DefaultListBoxWndProc; // ← エラーの原因（宣言漏れ）を修正
+HWND _hMainWindowHandle;
 
 // --- 設定クラス ---
 #define REG_KEY L"Software\\VideoScreensaver\\Setting"
