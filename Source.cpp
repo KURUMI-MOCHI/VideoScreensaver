@@ -215,7 +215,7 @@ BOOL WINAPI ScreenSaverConfigureDialog(HWND hWnd, UINT msg, WPARAM wParam, LPARA
 			const int nFilePathCount = setting.GetFilePathCount();
 			for (int i = 0; i < nFilePathCount; ++i)
 			{
-				LPTSTR lpszFilePath = setting.GetFilePath(i);
+				LPCTSTR lpszFilePath = setting.GetFilePath(i);
 				if (lpszFilePath)
 				{
 					const int nIndex = (int)SendDlgItemMessage(hWnd, IDC_VIDEO_LIST, LB_ADDSTRING, 0, (LPARAM)lpszFilePath);
