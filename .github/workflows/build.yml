@@ -22,4 +22,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: VideoScreensaver-Binary
-        path: Release/VideoScreensaver.exe
+        # パスを「**/」にすることで、サブフォルダの中まで探しに行かせます
+        path: "**/VideoScreensaver.exe"
+        # もし見つからなかったらエラーとして報告させる（デバッグ用）
+        if-no-files-found: error
