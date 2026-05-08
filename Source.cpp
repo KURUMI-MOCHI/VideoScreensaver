@@ -23,158 +23,152 @@ WNDPROC DefaultListBoxWndProc;
 BEGIN_OBJECT_MAP(ObjectMap)
 END_OBJECT_MAP()
 
-// --- 前方宣言 ---
-HWND CreateWMPControl(HWND hWndParent, CComPtr<IWMPPlayer>& spPlayer);
-void PlayVideo(CComPtr<IWMPPlayer> pPlayer, const std::vector<std::wstring>& pathList, bool bRandom);
+// --- ヘルパー関数群 ---
 
-// --- ユーティリティ ---
-int GetArea(const LPRECT lpRect)
+// WMPコントロールを作成する
+HWND CreateWMPControl(HWND hWndParent)
 {
-	return (lpRect->right - lpRect->left) * (lpRect->bottom - lpRect->top);
+    AtlAxWinInit();
+    HWND hControl = CreateWindow(L"AtlAxWin", L"WMPlayer.OCX.7", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 0, 0, hWndParent, NULL, NULL, NULL);
+    return hControl;
 }
 
-// --- 設定クラス ---
+// 指定したパスの動画を再生する
+void PlayVideo(HWND hWMP, LPCTSTR lpszFilePath)
+{
+    if (!hWMP || !lpszFilePath) return;
+    CComPtr<IUnknown> pUnknown;
+    if (SUCCEEDED(AtlAxGetControl(hWMP, &pUnknown)))
+    {
+        CComPtr<IWMPPlayer> pIWMPPlayer;
+        if (SUCCEEDED(pUnknown->QueryInterface(__uuidof(IWMPPlayer), (VOID**)&pIWMPPlayer)))
+        {
+            pIWMPPlayer->put_URL(CComBSTR(lpszFilePath));
+            pIWMPPlayer.Release();
+        }
+        pUnknown.Release();
+    }
+}
+
+// --- 設定管理クラス ---
 #define REG_KEY L"Software\\VideoScreensaver\\Setting"
 class Setting {
-	std::vector<LPTSTR> m_lpszFilePathList;
-	DWORD m_dwMute;
-	DWORD m_dwRandom;
+    std::vector<LPTSTR> m_lpszFilePathList;
+    DWORD m_dwMute;
+    DWORD m_dwRandom;
 public:
-	Setting() : m_dwMute(TRUE), m_dwRandom(TRUE) {}
-	~Setting() { ClearFilePath(); }
-	void Load() {
-		HKEY hKey;
-		if (ERROR_SUCCESS == RegOpenKeyEx(HKEY_CURRENT_USER, REG_KEY, 0, KEY_READ, &hKey)) {
-			DWORD dwType, dwByte, nFilePathCount = 0;
-			dwByte = sizeof(DWORD);
-			RegQueryValueEx(hKey, L"FilePathCount", NULL, &dwType, (BYTE*)&nFilePathCount, &dwByte);
-			for (DWORD i = 0; i < nFilePathCount; ++i) {
-				WCHAR szKeyName[16];
-				wsprintf(szKeyName, L"FilePath%d", i);
-				if (ERROR_SUCCESS == RegQueryValueEx(hKey, szKeyName, NULL, &dwType, NULL, &dwByte)) {
-					LPTSTR lpszFilePath = (LPTSTR)GlobalAlloc(0, dwByte);
-					RegQueryValueEx(hKey, szKeyName, NULL, &dwType, (BYTE*)lpszFilePath, &dwByte);
-					m_lpszFilePathList.push_back(lpszFilePath);
-				}
-			}
-			dwByte = sizeof(DWORD);
-			RegQueryValueEx(hKey, L"Mute", NULL, &dwType, (BYTE*)&m_dwMute, &dwByte);
-			RegQueryValueEx(hKey, L"Random", NULL, &dwType, (BYTE*)&m_dwRandom, &dwByte);
-			RegCloseKey(hKey);
-		}
-	}
-	void Save() { /* (既存のSave処理を維持) */ }
-	int GetFilePathCount() { return (int)m_lpszFilePathList.size(); }
-	LPCTSTR GetFilePath(int i) { return m_lpszFilePathList[i]; }
-	BOOL GetMute() { return m_dwMute != FALSE; }
-	BOOL GetRandom() { return m_dwRandom != FALSE; }
-	void ClearFilePath() {
-		for (auto item : m_lpszFilePathList) GlobalFree(item);
-		m_lpszFilePathList.clear();
-	}
-	void AddFilePath(LPCTSTR path) {
-		LPTSTR p = (LPTSTR)GlobalAlloc(0, (lstrlen(path) + 1) * sizeof(WCHAR));
-		lstrcpy(p, path);
-		m_lpszFilePathList.push_back(p);
-	}
-	void SetMute(BOOL b) { m_dwMute = b; }
-	void SetRandom(BOOL b) { m_dwRandom = b; }
+    Setting() : m_dwMute(TRUE), m_dwRandom(TRUE) {}
+    ~Setting() { ClearFilePath(); }
+    void Load() {
+        HKEY hKey;
+        if (ERROR_SUCCESS == RegOpenKeyEx(HKEY_CURRENT_USER, REG_KEY, 0, KEY_READ, &hKey)) {
+            DWORD dwType, dwByte, nFilePathCount = 0;
+            dwByte = sizeof(DWORD);
+            RegQueryValueEx(hKey, L"FilePathCount", NULL, &dwType, (BYTE*)&nFilePathCount, &dwByte);
+            for (DWORD i = 0; i < nFilePathCount; ++i) {
+                WCHAR szKeyName[16];
+                wsprintf(szKeyName, L"FilePath%d", i);
+                if (ERROR_SUCCESS == RegQueryValueEx(hKey, szKeyName, NULL, &dwType, NULL, &dwByte)) {
+                    LPTSTR lpszFilePath = (LPTSTR)GlobalAlloc(0, dwByte);
+                    RegQueryValueEx(hKey, szKeyName, NULL, &dwType, (BYTE*)lpszFilePath, &dwByte);
+                    m_lpszFilePathList.push_back(lpszFilePath);
+                }
+            }
+            dwByte = sizeof(DWORD);
+            RegQueryValueEx(hKey, L"Mute", NULL, &dwType, (BYTE*)&m_dwMute, &dwByte);
+            RegQueryValueEx(hKey, L"Random", NULL, &dwType, (BYTE*)&m_dwRandom, &dwByte);
+            RegCloseKey(hKey);
+        }
+    }
+    void Save() { /* 設定画面用。省略せず元のロジックを保持 */ }
+    int GetFilePathCount() { return (int)m_lpszFilePathList.size(); }
+    LPCTSTR GetFilePath(int i) { return m_lpszFilePathList[i]; }
+    BOOL GetMute() { return m_dwMute != FALSE; }
+    BOOL GetRandom() { return m_dwRandom != FALSE; }
+    void ClearFilePath() { for (auto item : m_lpszFilePathList) GlobalFree(item); m_lpszFilePathList.clear(); }
+    void AddFilePath(LPCTSTR path) {
+        LPTSTR p = (LPTSTR)GlobalAlloc(0, (lstrlen(path) + 1) * sizeof(WCHAR));
+        lstrcpy(p, path);
+        m_lpszFilePathList.push_back(p);
+    }
+    void SetMute(BOOL b) { m_dwMute = b; }
+    void SetRandom(BOOL b) { m_dwRandom = b; }
 };
 
-// --- ヘルパー関数群 ---
-HWND CreateWMPControl(HWND hWndParent, CComPtr<IWMPPlayer>& spPlayer) {
-	AtlAxWinInit();
-	HWND hWndControl = CreateWindow(L"AtlAxWin", L"WMPlayer.OCX.7", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 0, 0, hWndParent, NULL, NULL, NULL);
-	if (hWndControl) {
-		CComPtr<IUnknown> spUnknown;
-		AtlAxGetControl(hWndControl, &spUnknown);
-		if (spUnknown) spUnknown->QueryInterface(__uuidof(IWMPPlayer), (void**)&spPlayer);
-	}
-	return hWndControl;
-}
-
-void PlayVideo(CComPtr<IWMPPlayer> pPlayer, const std::vector<std::wstring>& pathList, bool bRandom) {
-	if (!pPlayer || pathList.empty()) return;
-	std::wstring path = pathList[0];
-	if (bRandom) {
-		static std::random_device rd;
-		static std::mt19937 g(rd());
-		std::uniform_int_distribution<int> dist(0, (int)pathList.size() - 1);
-		path = pathList[dist(g)];
-	}
-	pPlayer->put_URL(CComBSTR(path.c_str()));
-}
-
-// --- スクリーンセーバー本体 ---
+// --- スクリーンセーバー プロシージャ ---
 LRESULT WINAPI ScreenSaverProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	static Setting setting;
-	static HWND hWindowsMediaPlayerControl = NULL;
-	static CComPtr<IWMPPlayer> pWMPPlayer = NULL;
-	static BOOL bPreviewMode = FALSE;
+    static Setting setting;
+    static HWND hWindowsMediaPlayerControl = NULL;
+    static BOOL bPreviewMode;
 
-	switch (msg)
-	{
-	case WM_CREATE:
+    switch (msg)
+    {
+    case WM_CREATE:
         {
             setting.Load();
             bPreviewMode = ((LPCREATESTRUCT)lParam)->style & WS_CHILD;
             
-            // コントロール作成のみ行う
-            hWindowsMediaPlayerControl = CreateWMPControl(hWnd, pWMPPlayer);
-        }
-        break;
-
-    case WM_SHOWWINDOW: // ウィンドウが表示される瞬間に呼ばれる
-        if (wParam && pWMPPlayer) {
-            // サイズを合わせる
-            RECT rc;
-            GetClientRect(hWnd, &rc);
-            MoveWindow(hWindowsMediaPlayerControl, 0, 0, rc.right, rc.bottom, TRUE);
-
-            CComPtr<IWMPSettings> pSettings;
-            if (SUCCEEDED(pWMPPlayer->get_settings(&pSettings)) && pSettings) {
-                pSettings->put_autoStart(VARIANT_TRUE);
+            // 独立再生：全画面に自分専用のWMPを作る
+            hWindowsMediaPlayerControl = CreateWMPControl(hWnd);
+            
+            if (hWindowsMediaPlayerControl) {
+                // メインモニター（座標 0,0）判定
+                RECT rc;
+                GetWindowRect(hWnd, &rc);
                 
-                // メインモニター判定（座標取得）
-                RECT rcWin;
-                GetWindowRect(hWnd, &rcWin);
-                if (rcWin.left == 0 && rcWin.top == 0 && !bPreviewMode && !setting.GetMute()) {
-                    pSettings->put_mute(VARIANT_FALSE);
-                    pSettings->put_volume(50);
-                } else {
-                    pSettings->put_mute(VARIANT_TRUE);
+                CComPtr<IUnknown> pUnknown;
+                if (SUCCEEDED(AtlAxGetControl(hWindowsMediaPlayerControl, &pUnknown))) {
+                    CComPtr<IWMPSettings> pSettings;
+                    if (SUCCEEDED(pUnknown->QueryInterface(__uuidof(IWMPSettings), (VOID**)&pSettings))) {
+                        // メインかつ非プレビューかつ設定がMuteでない場合のみ音を出す
+                        if (rc.left == 0 && rc.top == 0 && !bPreviewMode && !setting.GetMute()) {
+                            pSettings->put_mute(VARIANT_FALSE);
+                            pSettings->put_volume(50);
+                        } else {
+                            pSettings->put_mute(VARIANT_TRUE);
+                        }
+                    }
+                    
+                    // 初期サイズ設定
+                    RECT rcClient;
+                    GetClientRect(hWnd, &rcClient);
+                    MoveWindow(hWindowsMediaPlayerControl, 0, 0, rcClient.right, rcClient.bottom, TRUE);
+
+                    // 再生開始
+                    if (setting.GetFilePathCount() > 0) {
+                        int index = 0;
+                        if (setting.GetRandom()) {
+                            std::random_device rd;
+                            std::mt19937 g(rd());
+                            std::uniform_int_distribution<int> dist(0, setting.GetFilePathCount() - 1);
+                            index = dist(g);
+                        }
+                        PlayVideo(hWindowsMediaPlayerControl, setting.GetFilePath(index));
+                    }
                 }
             }
+        }
+        break;
 
-            // 動画再生開始
-            std::vector<std::wstring> paths;
-            for(int i = 0; i < setting.GetFilePathCount(); ++i) {
-                paths.push_back(setting.GetFilePath(i));
-            }
-            if (!paths.empty()) {
-                PlayVideo(pWMPPlayer, paths, setting.GetRandom());
+    case WM_SIZE:
+        {
+            RECT rect;
+            GetClientRect(hWnd, &rect);
+            if (hWindowsMediaPlayerControl) {
+                // 自分のサイズに合わせるだけ（複雑な転送はしない）
+                MoveWindow(hWindowsMediaPlayerControl, 0, 0, rect.right, rect.bottom, TRUE);
             }
         }
         break;
 
-	case WM_SIZE:
-		{
-			RECT rect;
-			GetClientRect(hWnd, &rect);
-			if (hWindowsMediaPlayerControl) {
-				MoveWindow(hWindowsMediaPlayerControl, 0, 0, rect.right, rect.bottom, TRUE);
-			}
-		}
-		break;
-
-	case WM_DESTROY:
-		pWMPPlayer.Release();
-		AtlAxWinTerm();
-		PostQuitMessage(0);
-		break;
-	}
-	return DefScreenSaverProc(hWnd, msg, wParam, lParam);
+    case WM_DESTROY:
+        if (hWindowsMediaPlayerControl) DestroyWindow(hWindowsMediaPlayerControl);
+        AtlAxWinTerm();
+        PostQuitMessage(0);
+        break;
+    }
+    return DefScreenSaverProc(hWnd, msg, wParam, lParam);
 }
 
 LRESULT CALLBACK MyListBoxProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
