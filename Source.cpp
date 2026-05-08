@@ -189,7 +189,7 @@ LRESULT WINAPI ScreenSaverProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		if (!bPreviewMode)
 		{
 			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)&MonitorList);
-			std::sort(MonitorList.begin(), MonitorList.end(), std::greater<RECT>());
+			//std::sort(MonitorList.begin(), MonitorList.end(), std::greater<RECT>());
 		}
 		setting.Load();
 		AtlAxWinInit();
