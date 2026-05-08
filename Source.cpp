@@ -116,34 +116,47 @@ LRESULT WINAPI ScreenSaverProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 	switch (msg)
 	{
 	case WM_CREATE:
-		{
-			setting.Load();
-			bPreviewMode = ((LPCREATESTRUCT)lParam)->style & WS_CHILD;
-			
-			hWindowsMediaPlayerControl = CreateWMPControl(hWnd, pWMPPlayer);
-			if (pWMPPlayer) {
-				RECT rc;
-				GetWindowRect(hWnd, &rc);
-				
-				CComPtr<IWMPSettings> pSettings;
-				pWMPPlayer->get_settings(&pSettings);
+        {
+            setting.Load();
+            bPreviewMode = ((LPCREATESTRUCT)lParam)->style & WS_CHILD;
+            
+            // コントロール作成のみ行う
+            hWindowsMediaPlayerControl = CreateWMPControl(hWnd, pWMPPlayer);
+        }
+        break;
 
-				// メインモニター(0,0)かつプレビューでない場合のみ音を出す
-				if (rc.left == 0 && rc.top == 0 && !bPreviewMode && !setting.GetMute()) {
-					if (pSettings) {
-						pSettings->put_mute(VARIANT_FALSE);
-						pSettings->put_volume(50);
-					}
-				} else {
-					if (pSettings) pSettings->put_mute(VARIANT_TRUE);
-				}
+    case WM_SHOWWINDOW: // ウィンドウが表示される瞬間に呼ばれる
+        if (wParam && pWMPPlayer) {
+            // サイズを合わせる
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+            MoveWindow(hWindowsMediaPlayerControl, 0, 0, rc.right, rc.bottom, TRUE);
 
-				std::vector<std::wstring> paths;
-				for(int i=0; i<setting.GetFilePathCount(); ++i) paths.push_back(setting.GetFilePath(i));
-				PlayVideo(pWMPPlayer, paths, setting.GetRandom());
-			}
-		}
-		break;
+            CComPtr<IWMPSettings> pSettings;
+            if (SUCCEEDED(pWMPPlayer->get_settings(&pSettings)) && pSettings) {
+                pSettings->put_autoStart(VARIANT_TRUE);
+                
+                // メインモニター判定（座標取得）
+                RECT rcWin;
+                GetWindowRect(hWnd, &rcWin);
+                if (rcWin.left == 0 && rcWin.top == 0 && !bPreviewMode && !setting.GetMute()) {
+                    pSettings->put_mute(VARIANT_FALSE);
+                    pSettings->put_volume(50);
+                } else {
+                    pSettings->put_mute(VARIANT_TRUE);
+                }
+            }
+
+            // 動画再生開始
+            std::vector<std::wstring> paths;
+            for(int i = 0; i < setting.GetFilePathCount(); ++i) {
+                paths.push_back(setting.GetFilePath(i));
+            }
+            if (!paths.empty()) {
+                PlayVideo(pWMPPlayer, paths, setting.GetRandom());
+            }
+        }
+        break;
 
 	case WM_SIZE:
 		{
