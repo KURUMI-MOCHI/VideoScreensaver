@@ -169,128 +169,26 @@ LRESULT WINAPI ScreenSaverProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 	switch (msg)
 	{
 	case WM_CREATE:
-		_hMainWindowHandle = hWnd;
-		{
-			int n;
-			LPTSTR* argv = CommandLineToArgvW(GetCommandLine(), &n);
-			if (argv)
-			{
-				for (int i = 1; i < n; ++i)
-				{
-					if (lstrcmpi(argv[i], L"/P") == 0 || lstrcmpi(argv[i], L"/L") == 0)
-					{
-						bPreviewMode = TRUE;
-						break;
-					}
-				}
-				LocalFree(argv);
-			}
-		}
-		if (!bPreviewMode)
-		{
-			EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)&MonitorList);
-			//std::sort(MonitorList.begin(), MonitorList.end(), std::greater<RECT>());
-		}
-		setting.Load();
-		AtlAxWinInit();
-		_Module.Init(ObjectMap, ((LPCREATESTRUCT)lParam)->hInstance);
-		{
-			LPOLESTR lpolestr;
-			StringFromCLSID(__uuidof(WindowsMediaPlayer), &lpolestr);
-			hWindowsMediaPlayerControl = CreateWindow(_T(ATLAXWIN_CLASS), lpolestr, (bPreviewMode ? WS_CHILD | WS_DISABLED : WS_POPUP) | WS_VISIBLE, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
-			CoTaskMemFree(lpolestr);
-		}
-		if (hWindowsMediaPlayerControl)
-		{
-			if (!bPreviewMode)
-			{
-				DefaultVideoWndProc = (WNDPROC)SetWindowLongPtr(hWindowsMediaPlayerControl, GWL_WNDPROC, (LONG_PTR)MyVideoWndProc);
-				for (unsigned int i = 1; i < MonitorList.size(); ++i)
-				{
-					HTHUMBNAIL thumbnail;
-					if (SUCCEEDED(DwmRegisterThumbnail(hWnd, hWindowsMediaPlayerControl, &thumbnail)))
-					{
-						ThumbnailList.push_back(thumbnail);
-					}
-				}
-			}
-			CComPtr<IUnknown> pUnknown;
-			if (SUCCEEDED(AtlAxGetControl(hWindowsMediaPlayerControl, &pUnknown)))
-			{
-				CComPtr<IWMPSettings> pIWMPSettings;
-				if ((SUCCEEDED(pUnknown->QueryInterface(__uuidof(IWMPSettings), (VOID**)&pIWMPSettings))))
-				{
-					pIWMPSettings->put_autoStart(VARIANT_FALSE);
-					BSTR bstrText = SysAllocString(L"loop");
-					pIWMPSettings->setMode(bstrText, VARIANT_TRUE);
-					SysFreeString(bstrText);
-					if (setting.GetRandom())
-					{
-						setting.Shuffle();
-						bstrText = SysAllocString(L"shuffle");
-						pIWMPSettings->setMode(bstrText, VARIANT_TRUE);
-						SysFreeString(bstrText);
-					}
-					pIWMPSettings.Release();
-				}
-				CComPtr<IWMPPlayer4> pIWMPPlayer;
-				if ((SUCCEEDED(pUnknown->QueryInterface(__uuidof(IWMPPlayer4), (VOID**)&pIWMPPlayer))))
-				{
-					pIWMPPlayer->put_stretchToFit(VARIANT_TRUE);
-					BSTR bstrText = SysAllocString(L"none");
-					pIWMPPlayer->put_uiMode(bstrText);
-					SysFreeString(bstrText);
+        {
+            hWindowsMediaPlayerControl = CreateWMPControl(hWnd);
+            if (hWindowsMediaPlayerControl) {
+                // ウィンドウの座標を取得して、メインモニターかどうかを判定
+                RECT rc;
+                GetWindowRect(hWnd, &rc);
+                
+                // 左上が (0,0) のウィンドウをメイン（音あり）とする
+                if (rc.left == 0 && rc.top == 0) {
+                    put_Mute(VARIANT_FALSE);
+                    put_Volume(50); // 必要に応じて音量を調整してください
+                } else {
+                    // 他の3枚は無音にして処理を軽くする
+                    put_Mute(VARIANT_TRUE);
+                }
 
-					const int nFilePathCount = setting.GetFilePathCount();
-					if (nFilePathCount > 0)
-					{
-						CComPtr<IWMPPlaylist> pIWMPPlaylist;
-						if ((SUCCEEDED(pIWMPPlayer->get_currentPlaylist(&pIWMPPlaylist))))
-						{
-							for (int i = 0; i < nFilePathCount; ++i)
-							{
-								CComPtr<IWMPMedia> pIWMPMedia;
-								if ((SUCCEEDED(pIWMPPlayer->newMedia(setting.GetFilePath(i), &pIWMPMedia))))
-								{
-									pIWMPPlaylist->appendItem(pIWMPMedia);
-									pIWMPMedia.Release();
-								}
-							}
-							pIWMPPlaylist.Release();
-						}
-					}
-					HRESULT hr = CComWMPEventDispatch::CreateInstance(&m_pEventListener);
-					m_spEventListener = m_pEventListener;
-					if (SUCCEEDED(hr))
-					{
-						CComPtr<IConnectionPointContainer> spConnectionContainer;
-						hr = pIWMPPlayer->QueryInterface(&spConnectionContainer);
-						if (SUCCEEDED(hr))
-						{
-							hr = spConnectionContainer->FindConnectionPoint(__uuidof(IWMPEvents), &m_spConnectionPoint);
-							if (FAILED(hr))
-							{
-								hr = spConnectionContainer->FindConnectionPoint(__uuidof(_WMPOCXEvents), &m_spConnectionPoint);
-							}
-							spConnectionContainer.Release();
-						}
-						if (SUCCEEDED(hr))
-						{
-							hr = m_spConnectionPoint->Advise(m_spEventListener, &m_dwAdviseCookie);
-						}
-					}
-					pIWMPPlayer.Release();
-				}
-				CComPtr<IWMPControls> pIWMPControls;
-				if ((SUCCEEDED(pUnknown->QueryInterface(__uuidof(IWMPControls), (VOID**)&pIWMPControls))))
-				{
-					pIWMPControls->play();
-					pIWMPControls.Release();
-				}
-				pUnknown.Release();
-			}
-		}
-		break;
+                PlayVideo(VideoPath);
+            }
+        }
+        break;
 	case WM_APP:
 		if (setting.GetMute())
 		{
@@ -309,29 +207,10 @@ LRESULT WINAPI ScreenSaverProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam
 		break;
 	case WM_SIZE:
         {
-            // プレビューでも本番でも、自分のウィンドウサイズいっぱいにWMPを広げる
             RECT rect;
             GetClientRect(hWnd, &rect);
-            MoveWindow(hWindowsMediaPlayerControl, 0, 0, rect.right, rect.bottom, TRUE);
-
-            if (!bPreviewMode)
-            {
-                // サブモニターへの転送処理（既存のロジック）
-                for (unsigned int i = 1; i < MonitorList.size(); ++i)
-                {
-                    RECT dest = MonitorList[i];
-                    ScreenToClient(hWnd, (LPPOINT)&dest.left);
-                    ScreenToClient(hWnd, (LPPOINT)&dest.right);
-                    DWM_THUMBNAIL_PROPERTIES dskThumbProps;
-                    dskThumbProps.dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_SOURCECLIENTAREAONLY;
-                    dskThumbProps.fSourceClientAreaOnly = FALSE;
-                    dskThumbProps.fVisible = TRUE;
-                    dskThumbProps.opacity = 255;
-                    dskThumbProps.rcDestination = dest;
-                    if (i - 1 < ThumbnailList.size()) {
-                        DwmUpdateThumbnailProperties(ThumbnailList[i - 1], &dskThumbProps);
-                    }
-                }
+            if (hWindowsMediaPlayerControl) {
+                MoveWindow(hWindowsMediaPlayerControl, 0, 0, rect.right, rect.bottom, TRUE);
             }
         }
         break;
